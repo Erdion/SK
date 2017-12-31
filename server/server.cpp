@@ -58,14 +58,25 @@ void Server::addNewClient(){
 void Server::readMessage(int clientSocket){
 	char buffer[BUFLEN]{};
 	int rec = read(clientSocket, buffer, 255);
+	if(rec == 0){
+		throw DeadSocketException("Read failed");
+	}
 	write(0, buffer, rec);
 }
 
-void Server::checkIfDeadClient(int clientSocket){
-	char buffer[BUFLEN]{};
-	if(write(clientSocket, buffer, BUFLEN) == -1){ //TODO, nie mam pojecia jak to ogarnac na razie :P
-		write(0, "dead", 4); 
+void Server::removeDeadSockets(std::list<int> failedSocketIndexes){ //needs further testing
+	int countRemovedIndexes = 0;
+	for(int &index: failedSocketIndexes){
+		countRemovedIndexes++;
+		for(int i = index; i < numberOfSockets; i++){
+			whatToWaitFor[i] = whatToWaitFor[i + countRemovedIndexes]; 
+		}
 	}
+	numberOfSockets -= countRemovedIndexes;
+}
+
+Server::DeadSocketException::DeadSocketException(std::string message) : message(message){
+	
 }
 
 void Server::setUp(int port){
@@ -90,8 +101,11 @@ void Server::startListening(){
 }
 
 void Server::handleSocketEvents(){
-	// read a message
+	std::list<int> failedSocketIndexes;
+
 	int ready = poll(whatToWaitFor, numberOfSockets, -1);
+	
+
 	for(int i = 0; i < numberOfSockets; i++){
 		pollfd desc = whatToWaitFor[i];
 		if(desc.fd == sock && desc.revents == POLLIN){
@@ -100,14 +114,20 @@ void Server::handleSocketEvents(){
 		}
 		else if(desc.revents == POLLIN) {
 			write(0, "b", 1);
-			readMessage(desc.fd);
-			checkIfDeadClient(desc.fd);
+			try {
+				readMessage(desc.fd);
+			}
+			catch(const DeadSocketException &e){
+				failedSocketIndexes.push_back(i);
+				write(0, "dead", 4);
+			}
 		}
 		else {
 			write(0, "c", 1);
-			checkIfDeadClient(desc.fd);
 		}			
 	}
+
+	removeDeadSockets(failedSocketIndexes);
 }
 
 int Server::getSocket(){

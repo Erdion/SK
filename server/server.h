@@ -3,6 +3,7 @@
 
 #include <poll.h>
 #include <list>
+#include <string>
 
 class Client;
 
@@ -19,7 +20,14 @@ private:
 	static void bindSocket();
 	static void addNewClient();
 	static void readMessage(int clientSocket);
-	static void checkIfDeadClient(int clientSocket);
+	static void removeDeadSockets(std::list<int> failedSocketIndexes);
+
+	class DeadSocketException{
+	private:
+		std::string message;
+	public:
+		DeadSocketException(std::string message);
+	};
 public:
 	static void setUp(int port = 56789);
 	static void startListening();

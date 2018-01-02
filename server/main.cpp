@@ -15,6 +15,7 @@
 
 #include "server.h"
 #include "client.h"
+#include "game.h"
 
 #define BUFLEN 20
 
@@ -24,8 +25,6 @@ using namespace std;
 std::unordered_set<int> clientFds;
 
 // handles SIGINT
-void ctrl_c(int);
-
 // sends data to clientFds excluding fd
 void sendToAllBut(int fd, char * buffer, int count);
 
@@ -33,20 +32,18 @@ void sendToAllBut(int fd, char * buffer, int count);
 uint16_t readPort(char * txt);
 
 int main(int argc, char ** argv){
-	// get and validate port number
 	if(argc != 2) {
-		Server::setUp(); 
+		Server::init(); 
 	}
 	else{
-		Server::setUp(readPort(argv[1]));
+		Server::init(readPort(argv[1]));
 	}
-	
-	// graceful ctrl+c exit
-	//signal(SIGINT, ctrl_c);
-	// prevent dead sockets from throwing pipe errors on write
+	signal(SIGINT, Server::closeAllSocketsAndExit);
 	signal(SIGPIPE, SIG_IGN);
+
+	Game::init();
+	Game::printBoard();
 	
-	// enter listening mode
 	Server::startListening();
 
 	while(true) {
@@ -76,32 +73,3 @@ uint16_t readPort(char * txt){
 	if(*ptr!=0 || port<1 || (port>((1<<16)-1))) error(1,0,"illegal argument %s", txt);
 	return port;
 }
-
-
-/*
-void ctrl_c(int){
-	for(int clientFd : clientFds)
-		close(clientFd);
-	close(servFd);
-	printf("Closing server\n");
-	exit(0);
-}
-*/
-
-/*
-void sendToAllBut(int fd, char * buffer, int count){
-	int res;
-	decltype(clientFds) bad;
-	for(int clientFd : clientFds){
-		if(clientFd == fd) continue;
-		res = write(clientFd, buffer, count);
-		if(res!=count)
-			bad.insert(clientFd);
-	}
-	for(int clientFd : bad){
-		printf("removing %d\n", clientFd);
-		clientFds.erase(clientFd);
-		close(clientFd);
-	}
-}
-*/

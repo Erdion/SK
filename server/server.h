@@ -4,6 +4,7 @@
 #include <poll.h>
 #include <list>
 #include <string>
+#include <algorithm>
 
 class Client;
 
@@ -15,11 +16,15 @@ private:
 	static int numberOfSockets;
 	static std::list<Client*> clients;
 
+	static bool listContains(std::list<int> list, int item); //C++ lists don't have contains method :C
+
 	static void setServerSocket();
 	static void setReuseAddr();
 	static void bindSocket();
 	static void addNewClient();
-	static void readMessage(int clientSocket);
+	static std::string readMessage(int clientSocket);
+	static void sendMessage(std::string message, int clientSocket);
+	static void broadcastMessage(std::string message, std::list<int> ignoredSockets);
 	static void removeDeadSockets(std::list<int> failedSocketIndexes);
 
 	class DeadSocketException{
@@ -29,9 +34,10 @@ private:
 		DeadSocketException(std::string message);
 	};
 public:
-	static void setUp(int port = 56789);
+	static void init(int port = 56789);
 	static void startListening();
 	static void handleSocketEvents();
 	static int getSocket();
+	static void closeAllSocketsAndExit(int);
 };
 #endif

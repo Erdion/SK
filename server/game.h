@@ -28,6 +28,7 @@ private:
 		BOMB,
 		DESTRUCTIBLE,
 		WALL,
+		BURNING,
 		EMPTY,
 	};
 
@@ -55,8 +56,10 @@ private:
 		int y;
 		int bombsLeft;
 		int range;
+		bool dead;
 	public:
-		Player(int index, int x, int y, int bombs = 3);
+		Player(int index, int x, int y, int range = 3, int bombs = 3);
+		void die();
 		std::pair<int, int> getCoords();
 		void setCoords(int x, int y);
 		Field getField();
@@ -65,6 +68,7 @@ private:
 		void addBomb();
 		int getRange();
 		void addRange();
+		bool isDead();
 	};
 
 	class Bomb{
@@ -89,11 +93,13 @@ private:
 	static std::map<int, Player*> players;
 	static std::list<Bomb*> bombs;
 
-	static bool bombOnCoords(int x, int y);
+	static Bomb* bombOnCoords(int x, int y);
+	static bool isBombOnCoords(int x, int y);
+	static void explodeCoord(int x, int y);
 
 	static void move(int index, Direction direction);
 	static void setBomb(int index); 
-	static void explode(int x, int y, int range);
+	static void explode(Bomb* bomb);
 public:
 	static void init();
 	static void printBoard();

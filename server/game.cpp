@@ -64,6 +64,9 @@ std::string Game::Board::getBoardString(){
 				case WALL:
 					boardStr += "#";
 					break;
+				case BURNING:
+					boardStr += "*";
+					break;
 				case EMPTY:
 					boardStr += ".";
 					break;
@@ -85,7 +88,7 @@ std::pair<int, int> Game::Board::getSize(){
 	return std::pair<int, int>(height, width);	
 }
 
-Game::Player::Player(int index, int x, int y, int bombs): index(index), x(x), y(y), bombsLeft(bombs){
+Game::Player::Player(int index, int x, int y, int range, int bombs): index(index), x(x), y(y), range(range), bombsLeft(bombs), dead(false){
 	switch(index){
 			break;
 		case 1:
@@ -100,6 +103,10 @@ Game::Player::Player(int index, int x, int y, int bombs): index(index), x(x), y(
 		case 4:
 			playerField = PLAYER4;
 	}
+}
+
+void Game::Player::die(){
+	dead = true;
 }
 
 std::pair<int, int> Game::Player::getCoords(){
@@ -135,6 +142,10 @@ void Game::Player::addRange(){
 	range++;
 }
 
+bool Game::Player::isDead(){
+	return dead;
+}
+
 Game::Bomb::Bomb(int x, int y, int playerIndex, int timeout): x(x), y(y), playerIndex(playerIndex), timeout(timeout){
 	range = Game::players[playerIndex]->getRange();
 	startTime = system_clock::now();
@@ -162,13 +173,54 @@ int Game::Bomb::getRange(){
 	return range;
 }
 
-bool Game::bombOnCoords(int x, int y){
+bool Game::isBombOnCoords(int x, int y){
 	for(auto bomb: bombs){
 		if(bomb->isOnCoords(x, y)){
 			return true;
 		}
 	}
 	return false;
+}
+
+Game::Bomb* Game::bombOnCoords(int x, int y){
+	for(auto bomb: bombs){
+		if(bomb->isOnCoords(x, y)){
+			return bomb;
+		}
+	}
+	return NULL;
+}
+
+void Game::explodeCoord(int x, int y){
+	switch(board.getField(x, y)){
+		case PLAYER1:
+			board.setField(x, y, BURNING);
+			players[1]->die();
+			break;
+		case PLAYER2:
+			board.setField(x, y, BURNING);
+			players[2]->die();
+			break;
+		case PLAYER3:
+			board.setField(x, y, BURNING);
+			players[3]->die();
+			break;
+		case PLAYER4:
+			board.setField(x, y, BURNING);
+			players[4]->die();
+			break;
+		case BOMB:
+			explode(bombOnCoords(x, y));
+			board.setField(x, y, BURNING);
+			break;
+		case DESTRUCTIBLE:
+			board.setField(x, y, BURNING);
+			break;
+		case EMPTY:
+			board.setField(x, y, BURNING);
+			break;
+
+	}
 }
 	
 void Game::move(int index, Direction direction){
@@ -234,15 +286,20 @@ void Game::move(int index, Direction direction){
 			break;
 	}
 
-	if(nextField == EMPTY && !bombOnCoords(nextX, nextY)){
+	if((nextField == EMPTY || nextField == BURNING) && !bombOnCoords(nextX, nextY)){
 		if(bombOnCoords(x, y)){
 			board.setField(x, y, BOMB);
 		}
 		else{
 			board.setField(x, y, EMPTY);
 		}
-		player->setCoords(nextX, nextY);
-		board.setField(nextX, nextY, player->getField());
+		if(nextField == EMPTY){
+			player->setCoords(nextX, nextY);
+			board.setField(nextX, nextY, player->getField());
+		}
+		else if(nextField == BURNING){
+			player->die();
+		}
 	}
 }
 
@@ -260,19 +317,61 @@ void Game::setBomb(int index){
 	}
 }
 
-void Game::explode(int x, int y, int range){
+void Game::explode(Bomb* bomb){
+	std::pair<int, int> coords = bomb->getCoords();
+	int x = coords.first;
+	int y = coords.second;
+	int range = bomb->getRange();
+
+	players[bomb->getPlayerIndex()]->addBomb();
 	board.setField(x, y, EMPTY);
+
 	std::pair<int, int> size = board.getSize();
 	int height = size.first;
 	int width = size.second;
-	for(int i = -range; i < range + 1; i++){
-		if(x - range > 0 && x + range < height - 1){
-			
-		}
-		if(y - range > 0 && y + range < width - 1){
 
+	bool wallLeft = false;
+	bool wallRight = false;
+	bool wallUp = false;
+	bool wallDown = false;
+
+
+	for(int i = 0; i < range + 1; i++){
+		if(x + i < height - 1){
+			if(board.getField(x + i, y) == WALL){
+				wallUp = true;
+			}
+			if(!wallUp){
+				explodeCoord(x + i, y);
+			}
+		}
+		if(x - i > 0){
+			if(board.getField(x - i, y) == WALL){
+				wallDown = true;
+			}
+			if(!wallDown){
+				explodeCoord(x - i, y);
+			}
+		}
+		if(y + i < width - 1){
+			if(board.getField(x, y + i) == WALL){
+				wallRight = true;
+			}
+			if(!wallRight){
+				explodeCoord(x, y + i);
+			}
+		}
+		if(y - i > 0){
+			if(board.getField(x, y - i) == WALL){
+				wallLeft = true;
+			}
+			if(!wallLeft){
+				explodeCoord(x, y - i);
+			}
 		}
 	}
+	bombs.remove(bomb);
+	delete bomb;
 }
 
 void Game::init(){
@@ -315,23 +414,27 @@ void Game::initPlayer(int index){
 
 
 void Game::interpretMessage(std::string message, int index){
-	if(message == "/u\n"){
-		move(index, UP);
-	}
-	else if(message == "/d\n"){
-		move(index, DOWN);
-	}
-	else if(message == "/l\n"){
-		move(index, LEFT);
-	}
-	else if(message == "/r\n"){
-		move(index, RIGHT);
-	}
-	else if(message == "/b\n"){
-		setBomb(index);
-	}
-	else {
+	if(index > 0 && index <= 4){
+		if(!players[index]->isDead()){
+			if(message == "/u\n"){
+				move(index, UP);
+			}
+			else if(message == "/d\n"){
+				move(index, DOWN);
+			}
+			else if(message == "/l\n"){
+				move(index, LEFT);
+			}
+			else if(message == "/r\n"){
+				move(index, RIGHT);
+			}
+			else if(message == "/b\n"){
+				setBomb(index);
+			}
+			else {
 
+			}
+		}
 	}
 }
 
@@ -348,14 +451,7 @@ void Game::removePlayer(int index){
 
 void Game::explodeDueBombs(){
 	while(!bombs.empty() && bombs.front()->getTimeLeft() <= 0){
-		Bomb* bomb = bombs.front();
-		std::pair<int, int> coords = bomb->getCoords();
-		int x = coords.first;
-		int y = coords.second;
-		explode(x, y, bomb->getRange());
-		players[bomb->getPlayerIndex()]->addBomb();
-		bombs.pop_front();
-		delete bomb;
+		explode(bombs.front());
 	}
 }
 

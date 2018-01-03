@@ -3,9 +3,11 @@
 #include <utility>
 #include <map>
 #include <list>
-#include <cstring>
+#include <chrono>
 
 #include "game.h"
+
+using namespace std::chrono;
 
 Game::Board Game::board;
 std::map<int, Game::Player*> Game::players;
@@ -125,16 +127,39 @@ void Game::Player::addBomb(){
 	bombsLeft++;
 }
 
-Game::Bomb::Bomb(int x, int y, int timeout): x(x), y(y), timeout(timeout){
-	
+int Game::Player::getRange(){
+	return range;
 }
 
-int getTimeLeft(){
-	//TODO
+void Game::Player::addRange(){
+	range++;
+}
+
+Game::Bomb::Bomb(int x, int y, int playerIndex, int timeout): x(x), y(y), playerIndex(playerIndex), timeout(timeout){
+	range = Game::players[playerIndex]->getRange();
+	startTime = system_clock::now();
+}
+
+int Game::Bomb::getTimeLeft(){
+	auto now = system_clock::now();
+	duration<double> diff = now - startTime;
+	return timeout - (int)(diff.count() * 1000);
+}
+
+int Game::Bomb::getPlayerIndex(){
+	return playerIndex;
 }
 
 bool Game::Bomb::isOnCoords(int x, int y){
 	return (this->x == x && this->y == y);
+}
+
+std::pair<int, int> Game::Bomb::getCoords(){
+	return std::pair<int, int>(x, y);
+}
+
+int Game::Bomb::getRange(){
+	return range;
 }
 
 bool Game::bombOnCoords(int x, int y){
@@ -227,8 +252,26 @@ void Game::setBomb(int index){
 	int x = coords.first;
 	int y = coords.second;
 	if(player->getBombsLeft() > 0 && !bombOnCoords(x, y)){
-		bombs.push_back(new Bomb(x, y));
+		bombs.push_back(new Bomb(x, y, index));
+		bombs.sort([](Bomb* left, Bomb* right){ 
+			return left->getTimeLeft() < right->getTimeLeft(); 
+		});
 		player->removeBomb();
+	}
+}
+
+void Game::explode(int x, int y, int range){
+	board.setField(x, y, EMPTY);
+	std::pair<int, int> size = board.getSize();
+	int height = size.first;
+	int width = size.second;
+	for(int i = -range; i < range + 1; i++){
+		if(x - range > 0 && x + range < height - 1){
+			
+		}
+		if(y - range > 0 && y + range < width - 1){
+
+		}
 	}
 }
 
@@ -301,4 +344,28 @@ void Game::removePlayer(int index){
 	board.setField(x, y, EMPTY);
 	players.erase(index);
 	delete player;
+}
+
+void Game::explodeDueBombs(){
+	while(!bombs.empty() && bombs.front()->getTimeLeft() <= 0){
+		Bomb* bomb = bombs.front();
+		std::pair<int, int> coords = bomb->getCoords();
+		int x = coords.first;
+		int y = coords.second;
+		explode(x, y, bomb->getRange());
+		players[bomb->getPlayerIndex()]->addBomb();
+		bombs.pop_front();
+		delete bomb;
+	}
+}
+
+int Game::timeUntilExplosion(){
+	if(bombs.empty()){
+		return -1;
+	}
+	int res = bombs.front()->getTimeLeft();
+	if(res <= 0){
+		res = 1;
+	}
+	return res;
 }

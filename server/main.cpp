@@ -42,7 +42,6 @@ int main(int argc, char ** argv){
 	signal(SIGPIPE, SIG_IGN);
 
 	Game::init();
-	Game::printBoard();
 	
 	Server::startListening();
 

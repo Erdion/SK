@@ -2,12 +2,14 @@
 #include <cstdio>
 #include <utility>
 #include <map>
+#include <list>
 #include <cstring>
 
 #include "game.h"
 
 Game::Board Game::board;
 std::map<int, Game::Player*> Game::players;
+std::list<Game::Bomb*> Game::bombs;
 
 Game::Board::Board(int width, int height) : board(height, std::vector<Field>(width, EMPTY)), width(width), height(height) {
 	fillBoard();
@@ -34,39 +36,46 @@ void Game::Board::setField(int x, int y, Field field){
 	board[x][y] = field;
 }
 
-void Game::Board::print(){
+std::string Game::Board::getBoardString(){
+	std::string boardStr = "";
 	for(int x = 0; x < height; x++){
 		for(int y = 0; y < width; y++){
 			switch(board[x][y]){
 				case PLAYER1:
-					printf("1");
+					boardStr += "1";
 					break;
 				case PLAYER2:
-					printf("2");
+					boardStr += "2";
 					break;
 				case PLAYER3:
-					printf("3");
+					boardStr += "3";
 					break;
 				case PLAYER4:
-					printf("4");
+					boardStr += "4";
 					break;
 				case BOMB:
-					printf("B");
+					boardStr += "B";
 					break;
 				case DESTRUCTIBLE:
-					printf("D");
+					boardStr += "D";
 					break;
 				case WALL:
-					printf("#");
+					boardStr += "#";
 					break;
 				case EMPTY:
-					printf(".");
+					boardStr += ".";
 					break;
 			}
-			printf(" ");
 		}
-		printf("\n");
+		boardStr += "\n";
 	}
+	return boardStr;
+}
+
+void Game::Board::print(){
+	printf("\n");
+	std::string boardString = getBoardString();
+	printf("%s", boardString.c_str());
 	fflush(stdout);
 }
 
@@ -74,7 +83,7 @@ std::pair<int, int> Game::Board::getSize(){
 	return std::pair<int, int>(height, width);	
 }
 
-Game::Player::Player(int index, int x, int y): index(index), x(x), y(y){
+Game::Player::Player(int index, int x, int y, int bombs): index(index), x(x), y(y), bombsLeft(bombs){
 	switch(index){
 			break;
 		case 1:
@@ -104,10 +113,40 @@ Game::Field Game::Player::getField(){
 	return playerField;
 }
 
+int Game::Player::getBombsLeft(){
+	return bombsLeft;
+}
 
+void Game::Player::removeBomb(){
+	bombsLeft--;
+}
+
+void Game::Player::addBomb(){
+	bombsLeft++;
+}
+
+Game::Bomb::Bomb(int x, int y, int timeout): x(x), y(y), timeout(timeout){
+	
+}
+
+int getTimeLeft(){
+	//TODO
+}
+
+bool Game::Bomb::isOnCoords(int x, int y){
+	return (this->x == x && this->y == y);
+}
+
+bool Game::bombOnCoords(int x, int y){
+	for(auto bomb: bombs){
+		if(bomb->isOnCoords(x, y)){
+			return true;
+		}
+	}
+	return false;
+}
+	
 void Game::move(int index, Direction direction){
-	printf("%d", index);
-	fflush(stdout);
 	Player* player = players[index];
 	std::pair<int, int> coords = player->getCoords();
 	int x = coords.first;
@@ -119,75 +158,77 @@ void Game::move(int index, Direction direction){
 
 	Field field = board.getField(x, y); 
 	Field nextField;
-	printf("m");
-	fflush(stdout);
-	
+
+	int nextX;
+	int nextY;
+
 	switch(direction){
 		case UP:
 			if(x == 0) {
-				break;
+				return;
 			}
+			nextX = x - 1;
+			nextY = y;
 
-			nextField = board.getField(x - 1, y);
-
-			if(nextField != EMPTY){
-				break;
-			}
-
-			board.setField(x, y, EMPTY);
-			player->setCoords(x - 1, y);
-			board.setField(x - 1, y, player->getField());
+			nextField = board.getField(nextX, nextY);
 
 			break;
 
 		case DOWN:
 			if(x == height - 1) {
-				break;
+				return;
 			}
+			nextX = x + 1;
+			nextY = y;
 
-			nextField = board.getField(x + 1, y);
-
-			if(nextField != EMPTY){
-				break;
-			}
-
-			board.setField(x, y, EMPTY);
-			player->setCoords(x + 1, y);
-			board.setField(x + 1, y, player->getField());
+			nextField = board.getField(nextX, nextY);
 
 			break;
+
 		case LEFT:
 			if(y == 0) {
-				break;
+				return;
 			}
+			nextX = x;
+			nextY = y - 1;
 
-			nextField = board.getField(x, y - 1);
-
-			if(nextField != EMPTY){
-				break;
-			}
-
-			board.setField(x, y, EMPTY);
-			player->setCoords(x, y - 1);
-			board.setField(x, y - 1, player->getField());
+			nextField = board.getField(nextX, nextY);
 			
 			break;
+
 		case RIGHT:
 			if(y == width - 1) {
-				break;
+				return;
 			}
 
-			nextField = board.getField(x, y + 1);
+			nextX = x;
+			nextY = y + 1;
 
-			if(nextField != EMPTY){
-				break;
-			}
+			nextField = board.getField(nextX, nextY);
 
-			board.setField(x, y, EMPTY);
-			player->setCoords(x, y + 1);
-			board.setField(x, y + 1, player->getField());
-			
 			break;
+	}
+
+	if(nextField == EMPTY && !bombOnCoords(nextX, nextY)){
+		if(bombOnCoords(x, y)){
+			board.setField(x, y, BOMB);
+		}
+		else{
+			board.setField(x, y, EMPTY);
+		}
+		player->setCoords(nextX, nextY);
+		board.setField(nextX, nextY, player->getField());
+	}
+}
+
+void Game::setBomb(int index){
+	Player* player = players[index];
+	std::pair<int, int> coords = player->getCoords();
+	int x = coords.first;
+	int y = coords.second;
+	if(player->getBombsLeft() > 0 && !bombOnCoords(x, y)){
+		bombs.push_back(new Bomb(x, y));
+		player->removeBomb();
 	}
 }
 
@@ -197,6 +238,10 @@ void Game::init(){
 
 void Game::printBoard(){
 	board.print();
+}
+
+std::string Game::getBoardString(){
+	return board.getBoardString();
 }
 
 void Game::initPlayer(int index){
@@ -240,7 +285,7 @@ void Game::interpretMessage(std::string message, int index){
 		move(index, RIGHT);
 	}
 	else if(message == "/b\n"){
-
+		setBomb(index);
 	}
 	else {
 

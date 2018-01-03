@@ -1,6 +1,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <string>
+#include <cstring>
 #include <unistd.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -16,7 +17,7 @@
 #include "client.h"
 #include "game.h"
 
-#define BUFLEN 20
+#define BUFLEN 256
 #define TIMEOUT 34
 
 int Server::sock;
@@ -74,8 +75,9 @@ std::string Server::readMessage(int clientSocket){
 
 void Server::sendMessage(std::string message, int clientSocket){
 	char buffer[BUFLEN]{};
-	std::copy(message.begin(), message.end(), buffer);
-	int rec = write(clientSocket, buffer, 255);
+	strcpy(buffer, message.c_str());
+	buffer[message.length() - 1] = '\0';
+	int rec = write(clientSocket, buffer, BUFLEN);
 	if(rec == -1){
 		throw DeadSocketException("Write failed");
 	}
@@ -155,9 +157,12 @@ void Server::handleSocketEvents(){
 		}
 	}
 
-	Game::printBoard();
-
 	removeDeadSockets(failedSocketIndexes);
+
+	std::list<int> ignoredBroadcastSockets;
+	ignoredBroadcastSockets.push_back(sock);
+
+	broadcastMessage(Game::getBoardString(), ignoredBroadcastSockets); 
 }
 
 int Server::getSocket(){

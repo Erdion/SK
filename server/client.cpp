@@ -12,7 +12,7 @@
 #include "server.h"
 #include "client.h"
 
-#define BUFLEN 20
+#define BUFLEN 256
 
 using namespace std;
 

@@ -28,7 +28,7 @@ private:
 		BOMB,
 		DESTRUCTIBLE,
 		WALL,
-		BURNING,
+		FLAME,
 		EMPTY,
 	};
 
@@ -71,27 +71,39 @@ private:
 		bool isDead();
 	};
 
-	class Bomb{
-	private:
+	class Perishable{
+	protected:
 		int x;
 		int y;
 		int timeout;
+		time_point<system_clock> startTime;	
+		Perishable(int x, int y, int timeout);
+	public:
+		int getTimeLeft();
+		std::pair<int, int> getCoords();
+	};
+
+	class Bomb : public Perishable{
+	private:
 		int playerIndex;
 		int range;
-		time_point<system_clock> startTime;	
 	public:
 		Bomb(int x, int y, int playerIndex, int timeout = 3000);
-		int getTimeLeft();
 		int getPlayerIndex();
 		bool isOnCoords(int x, int y);
-		std::pair<int, int> getCoords();
 		int getRange();
+	};
+
+	class Flame : public Perishable{
+	public:
+		Flame(int x, int y, int timeout = 2000);
 	};
 	
 	static bool gameInPlay;
 	static Board board;
 	static std::map<int, Player*> players;
 	static std::list<Bomb*> bombs;
+	static std::list<Flame*> flames;
 
 	static Bomb* bombOnCoords(int x, int y);
 	static bool isBombOnCoords(int x, int y);
@@ -100,6 +112,7 @@ private:
 	static void move(int index, Direction direction);
 	static void setBomb(int index); 
 	static void explode(Bomb* bomb);
+	static void extinguish(Flame* flame);
 public:
 	static void init();
 	static void printBoard();
@@ -108,7 +121,8 @@ public:
 	static void interpretMessage(std::string message, int index);
 	static void removePlayer(int index);
 	static void explodeDueBombs();
-	static int timeUntilExplosion();
+	static void extinguishDueFlames();
+	static int timeUntilPerish();
 
 };
 #endif

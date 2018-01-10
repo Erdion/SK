@@ -12,6 +12,7 @@ using namespace std::chrono;
 Game::Board Game::board;
 std::map<int, Game::Player*> Game::players;
 std::list<Game::Bomb*> Game::bombs;
+std::list<Game::Flame*> Game::flames;
 
 Game::Board::Board(int width, int height) : board(height, std::vector<Field>(width, EMPTY)), width(width), height(height) {
 	fillBoard();
@@ -64,7 +65,7 @@ std::string Game::Board::getBoardString(){
 				case WALL:
 					boardStr += "#";
 					break;
-				case BURNING:
+				case FLAME:
 					boardStr += "*";
 					break;
 				case EMPTY:
@@ -146,15 +147,23 @@ bool Game::Player::isDead(){
 	return dead;
 }
 
-Game::Bomb::Bomb(int x, int y, int playerIndex, int timeout): x(x), y(y), playerIndex(playerIndex), timeout(timeout){
-	range = Game::players[playerIndex]->getRange();
+Game::Perishable::Perishable(int x, int y, int timeout): x(x), y(y), timeout(timeout){
 	startTime = system_clock::now();
 }
 
-int Game::Bomb::getTimeLeft(){
+int Game::Perishable::getTimeLeft(){
 	auto now = system_clock::now();
 	duration<double> diff = now - startTime;
 	return timeout - (int)(diff.count() * 1000);
+}
+
+std::pair<int, int> Game::Perishable::getCoords(){
+	return std::pair<int, int>(x, y);
+}
+
+
+Game::Bomb::Bomb(int x, int y, int playerIndex, int timeout): Perishable(x, y, timeout), playerIndex(playerIndex){
+	range = Game::players[playerIndex]->getRange();
 }
 
 int Game::Bomb::getPlayerIndex(){
@@ -165,21 +174,12 @@ bool Game::Bomb::isOnCoords(int x, int y){
 	return (this->x == x && this->y == y);
 }
 
-std::pair<int, int> Game::Bomb::getCoords(){
-	return std::pair<int, int>(x, y);
-}
-
 int Game::Bomb::getRange(){
 	return range;
 }
 
-bool Game::isBombOnCoords(int x, int y){
-	for(auto bomb: bombs){
-		if(bomb->isOnCoords(x, y)){
-			return true;
-		}
-	}
-	return false;
+Game::Flame::Flame(int x, int y, int timeout): Perishable(x, y, timeout){
+	
 }
 
 Game::Bomb* Game::bombOnCoords(int x, int y){
@@ -191,36 +191,41 @@ Game::Bomb* Game::bombOnCoords(int x, int y){
 	return NULL;
 }
 
+bool Game::isBombOnCoords(int x, int y){
+	for(auto bomb: bombs){
+		if(bomb->isOnCoords(x, y)){
+			return true;
+		}
+	}
+	return false;
+}
+
 void Game::explodeCoord(int x, int y){
 	switch(board.getField(x, y)){
 		case PLAYER1:
-			board.setField(x, y, BURNING);
 			players[1]->die();
 			break;
 		case PLAYER2:
-			board.setField(x, y, BURNING);
 			players[2]->die();
 			break;
 		case PLAYER3:
-			board.setField(x, y, BURNING);
 			players[3]->die();
 			break;
 		case PLAYER4:
-			board.setField(x, y, BURNING);
 			players[4]->die();
 			break;
 		case BOMB:
 			explode(bombOnCoords(x, y));
-			board.setField(x, y, BURNING);
 			break;
 		case DESTRUCTIBLE:
-			board.setField(x, y, BURNING);
 			break;
-		case EMPTY:
-			board.setField(x, y, BURNING);
-			break;
+		case WALL:
+			return;
 
 	}
+	Flame* flame = new Flame(x, y);
+	flames.push_back(flame);
+	board.setField(x, y, FLAME);
 }
 	
 void Game::move(int index, Direction direction){
@@ -286,7 +291,7 @@ void Game::move(int index, Direction direction){
 			break;
 	}
 
-	if((nextField == EMPTY || nextField == BURNING) && !bombOnCoords(nextX, nextY)){
+	if((nextField == EMPTY || nextField == FLAME) && !bombOnCoords(nextX, nextY)){
 		if(bombOnCoords(x, y)){
 			board.setField(x, y, BOMB);
 		}
@@ -297,7 +302,7 @@ void Game::move(int index, Direction direction){
 			player->setCoords(nextX, nextY);
 			board.setField(nextX, nextY, player->getField());
 		}
-		else if(nextField == BURNING){
+		else if(nextField == FLAME){
 			player->die();
 		}
 	}
@@ -370,8 +375,20 @@ void Game::explode(Bomb* bomb){
 			}
 		}
 	}
-	bombs.remove(bomb);
+
+	flames.sort([](Flame* left, Flame* right){ 
+		return left->getTimeLeft() < right->getTimeLeft(); 
+	});
+
 	delete bomb;
+}
+
+void Game::extinguish(Flame* flame){
+	std::pair<int, int> coords = flame->getCoords();
+	int x = coords.first;
+	int y = coords.second;
+	board.setField(x, y, EMPTY);
+	delete flame;
 }
 
 void Game::init(){
@@ -431,6 +448,9 @@ void Game::interpretMessage(std::string message, int index){
 			else if(message == "/b\n"){
 				setBomb(index);
 			}
+			else if(message == "/s\n"){
+
+			}
 			else {
 
 			}
@@ -452,16 +472,34 @@ void Game::removePlayer(int index){
 void Game::explodeDueBombs(){
 	while(!bombs.empty() && bombs.front()->getTimeLeft() <= 0){
 		explode(bombs.front());
+		bombs.pop_front();
 	}
 }
 
-int Game::timeUntilExplosion(){
-	if(bombs.empty()){
+void Game::extinguishDueFlames(){
+	while(!flames.empty() && flames.front()->getTimeLeft() <= 0){
+		extinguish(flames.front());
+		flames.pop_front();
+	}
+}
+
+int Game::timeUntilPerish(){
+	int res;
+	if(bombs.empty() && flames.empty()){
 		return -1;
 	}
-	int res = bombs.front()->getTimeLeft();
+	else if(bombs.empty()){
+		res = flames.front()->getTimeLeft();
+	}
+	else if(flames.empty()){
+		res = bombs.front()->getTimeLeft();
+	}
+	else{
+		res = std::min(bombs.front()->getTimeLeft(), flames.front()->getTimeLeft());
+	}
 	if(res <= 0){
 		res = 1;
 	}
 	return res;
 }
+

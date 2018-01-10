@@ -132,7 +132,7 @@ void Server::startListening(){
 void Server::handleSocketEvents(){
 	std::list<int> failedSocketIndexes;
 
-	int timeout = Game::timeUntilExplosion();
+	int timeout = Game::timeUntilPerish();
 	int ready = poll(whatToWaitFor, numberOfSockets, timeout);
 	
 	for(int i = 0; i < numberOfSockets; i++){
@@ -159,6 +159,7 @@ void Server::handleSocketEvents(){
 	}
 
 	Game::explodeDueBombs();
+	Game::extinguishDueFlames();
 
 	removeDeadSockets(failedSocketIndexes);
 

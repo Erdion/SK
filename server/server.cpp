@@ -24,7 +24,6 @@ int Server::sock;
 int Server::port;
 pollfd Server::whatToWaitFor[10]{};
 int Server::numberOfSockets;
-std::list<Client*> Server::clients;
 
 bool Server::listContains(std::list<int> list, int item){
 	return std::find(list.begin(), list.end(), item) != list.end();
@@ -59,7 +58,6 @@ void Server::addNewClient(){
 	Client* client = new Client(index);
 	whatToWaitFor[index].fd = client->getSocket();
 	whatToWaitFor[index].events = POLLIN;
-	clients.push_back(client);
 }
 
 
@@ -98,7 +96,7 @@ void Server::removeDeadSockets(std::list<int> failedSocketIndexes){ //needs furt
 		countRemovedIndexes++;
 		for(int i = index; i < numberOfSockets; i++){
 			whatToWaitFor[i] = whatToWaitFor[i + countRemovedIndexes]; 
-			Game::removePlayer(i);
+			Game::removeParticipant(i);
 		}
 	}
 	numberOfSockets -= countRemovedIndexes;
@@ -141,7 +139,7 @@ void Server::handleSocketEvents(){
 			if(desc.fd == sock && desc.revents == POLLIN){
 				write(0, "a", 1);
 				addNewClient();
-				Game::initPlayer(numberOfSockets - 1);
+				Game::initParticipant(numberOfSockets - 1);
 			}
 			else if(desc.revents == POLLIN) {
 				write(0, "b", 1);
@@ -162,6 +160,8 @@ void Server::handleSocketEvents(){
 	Game::extinguishDueFlames();
 
 	removeDeadSockets(failedSocketIndexes);
+
+	Game::handleGameEnd();
 
 	std::list<int> ignoredBroadcastSockets;
 	ignoredBroadcastSockets.push_back(sock);

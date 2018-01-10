@@ -6,15 +6,12 @@
 #include <string>
 #include <algorithm>
 
-class Client;
-
 class Server{
 private:
 	static int sock;
 	static int port;
 	static pollfd whatToWaitFor[10];
 	static int numberOfSockets;
-	static std::list<Client*> clients;
 
 	static bool listContains(std::list<int> list, int item); //C++ lists don't have contains method :C
 

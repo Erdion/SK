@@ -4,13 +4,16 @@
 #include <map>
 #include <list>
 #include <chrono>
+#include <algorithm>
 
 #include "game.h"
 
 using namespace std::chrono;
 
+bool Game::gameInPlay;
 Game::Board Game::board;
 std::map<int, Game::Player*> Game::players;
+std::map<int, Game::Spectator*> Game::spectators;
 std::list<Game::Bomb*> Game::bombs;
 std::list<Game::Flame*> Game::flames;
 
@@ -24,8 +27,11 @@ void Game::Board::fillBoard(){
 			if(x % 2 == 1 && y % 2 == 1) {
 				board[x][y] = WALL;	
 			}
-			else if(x % 2 == 1 || y % 2 ==  1) {
-				//board[x][y] = 'D';
+			else if((x % 2 == 1 || y % 2 == 1)) {
+				board[x][y] = EMPTY;
+			}
+			else{
+				board[x][y] = EMPTY;
 			}
 		}
 	}
@@ -89,7 +95,19 @@ std::pair<int, int> Game::Board::getSize(){
 	return std::pair<int, int>(height, width);	
 }
 
-Game::Player::Player(int index, int x, int y, int range, int bombs): index(index), x(x), y(y), range(range), bombsLeft(bombs), dead(false){
+Game::Participant::Participant(int index): index(index) {
+	
+}
+
+int Game::Participant::getIndex(){
+	return index;
+}
+
+Game::Spectator::Spectator(int index): Participant(index) {
+	
+}
+
+Game::Player::Player(int index, int x, int y, int range, int bombs): Participant(index), x(x), y(y), range(range), bombsLeft(bombs), dead(false){
 	switch(index){
 			break;
 		case 1:
@@ -180,6 +198,98 @@ int Game::Bomb::getRange(){
 
 Game::Flame::Flame(int x, int y, int timeout): Perishable(x, y, timeout){
 	
+}
+
+void Game::startGame(){
+	gameInPlay = true;
+}
+
+void Game::endGame(){
+	bombs.clear();
+	flames.clear();
+	board.fillBoard();
+	for(auto item: players){
+		Player* player = item.second;
+		int index = player->getIndex();
+		removePlayer(index);
+		initPlayer(index);
+	}
+	std::list<Spectator*> spectatorsToBePlayers;
+	for(auto item: spectators){
+		Spectator* spectator = item.second;
+		if(spectator->getIndex() < 4){
+			spectatorsToBePlayers.push_back(spectator);
+		}
+	}
+	for(Spectator* spectator: spectatorsToBePlayers){
+		changeSpectatorToPlayer(spectator->getIndex());
+	}
+	gameInPlay = false;
+}
+
+bool Game::hasGameEnded(){
+	int numberOfAlivePlayers = 0;
+	for(auto item: players){
+		Player* player = item.second;
+		if(!player->isDead()){
+			numberOfAlivePlayers++;
+		}
+	}
+	return numberOfAlivePlayers > 1 ? false : true;
+}
+
+void Game::initPlayer(int index){
+	Player* player;
+	std::pair<int, int> size = board.getSize();
+	int height = size.first;
+	int width = size.second;
+	switch(index){
+		case 1:
+			player = new Player(index, 0, 0);
+			board.setField(0, 0, PLAYER1);
+			break;
+		case 2:	
+			player = new Player(index, height - 1, width - 1);
+			board.setField(height - 1, width - 1, PLAYER2);
+			break;
+		case 3:	
+			player = new Player(index, height - 1, 0);
+			board.setField(height - 1, 0, PLAYER3);
+			break;
+		case 4:	
+			player = new Player(index, 0, width - 1);
+			board.setField(0, width - 1, PLAYER4);
+			break;
+	}
+	players[index] = player;
+}
+
+void Game::initSpectator(int index){
+	Spectator* spectator = new Spectator(index);
+	spectators[index] = spectator;
+}
+
+
+void Game::removePlayer(int index){
+	Player* player = players[index];
+	std::pair<int, int> coords = player->getCoords();
+	int x = coords.first;
+	int y = coords.second;
+	
+	board.setField(x, y, EMPTY);
+	players.erase(index);
+	delete player;
+}
+
+void Game::removeSpectator(int index){
+	Spectator* spectator = spectators[index];
+	spectators.erase(index);
+	delete spectator;
+}
+
+void Game::changeSpectatorToPlayer(int index){
+	removeSpectator(index);
+	initPlayer(index);
 }
 
 Game::Bomb* Game::bombOnCoords(int x, int y){
@@ -350,7 +460,7 @@ void Game::explode(Bomb* bomb){
 				explodeCoord(x + i, y);
 			}
 		}
-		if(x - i > 0){
+		if(x - i >= 0){
 			if(board.getField(x - i, y) == WALL){
 				wallDown = true;
 			}
@@ -366,7 +476,7 @@ void Game::explode(Bomb* bomb){
 				explodeCoord(x, y + i);
 			}
 		}
-		if(y - i > 0){
+		if(y - i >= 0){
 			if(board.getField(x, y - i) == WALL){
 				wallLeft = true;
 			}
@@ -392,7 +502,25 @@ void Game::extinguish(Flame* flame){
 }
 
 void Game::init(){
-	
+	gameInPlay = false;
+}
+
+void Game::initParticipant(int index){
+	if(index < 4 && !gameInPlay){
+		initPlayer(index);
+	}
+	else{
+		initSpectator(index);
+	}
+}
+
+void Game::removeParticipant(int index){
+	if(players.count(index) != 0){
+		removePlayer(index);
+	}
+	else{
+		removeSpectator(index);
+	}
 }
 
 void Game::printBoard(){
@@ -403,36 +531,14 @@ std::string Game::getBoardString(){
 	return board.getBoardString();
 }
 
-void Game::initPlayer(int index){
-	Player* player;
-	std::pair<int, int> size = board.getSize();
-	int height = size.first;
-	int width = size.second;
-	switch(index){
-		case 1:
-			player = new Player(index, 0, 0);
-			board.setField(0, 0, PLAYER1);
-			break;
-		case 2:	
-			player = new Player(index, height - 1, width - 1);
-			board.setField(height - 1, width - 1, PLAYER2);
-			break;
-		case 3:	
-			player = new Player(index, height - 1, 0);
-			board.setField(height - 1, 0, PLAYER3);
-			break;
-		case 4:	
-			player = new Player(index, 0, width - 1);
-			board.setField(0, width - 1, PLAYER4);
-			break;
-	}
-	players[index] = player;
-}
-
-
 void Game::interpretMessage(std::string message, int index){
-	if(index > 0 && index <= 4){
-		if(!players[index]->isDead()){
+	if(index > 0 && index <= 4 && players.count(index) != 0){
+		if(!gameInPlay){
+			if(message == "/s\n"){
+				startGame();
+			}
+		}
+		else if(!players[index]->isDead()){
 			if(message == "/u\n"){
 				move(index, UP);
 			}
@@ -448,25 +554,11 @@ void Game::interpretMessage(std::string message, int index){
 			else if(message == "/b\n"){
 				setBomb(index);
 			}
-			else if(message == "/s\n"){
-
-			}
 			else {
 
 			}
 		}
 	}
-}
-
-void Game::removePlayer(int index){
-	Player* player = players[index];
-	std::pair<int, int> coords = player->getCoords();
-	int x = coords.first;
-	int y = coords.second;
-	
-	board.setField(x, y, EMPTY);
-	players.erase(index);
-	delete player;
 }
 
 void Game::explodeDueBombs(){
@@ -503,3 +595,8 @@ int Game::timeUntilPerish(){
 	return res;
 }
 
+void Game::handleGameEnd(){
+	if(gameInPlay && hasGameEnded()){
+		endGame();
+	}
+}

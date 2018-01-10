@@ -48,9 +48,21 @@ private:
 		std::pair<int, int> getSize();
 	};
 
-	class Player{
+	class Participant{
 	private:
 		int index;
+	public:
+		Participant(int index);
+		int getIndex();
+	};
+
+	class Spectator : public Participant{
+	public:
+		Spectator(int index);
+	};
+
+	class Player : public Participant{
+	private:
 		Field playerField;
 		int x;
 		int y;
@@ -102,8 +114,19 @@ private:
 	static bool gameInPlay;
 	static Board board;
 	static std::map<int, Player*> players;
+	static std::map<int, Spectator*> spectators;
 	static std::list<Bomb*> bombs;
 	static std::list<Flame*> flames;
+
+	static void startGame();
+	static void endGame();
+	static bool hasGameEnded();
+
+	static void initPlayer(int index);
+	static void initSpectator(int index);
+	static void removePlayer(int index);
+	static void removeSpectator(int index);
+	static void changeSpectatorToPlayer(int index);
 
 	static Bomb* bombOnCoords(int x, int y);
 	static bool isBombOnCoords(int x, int y);
@@ -113,16 +136,17 @@ private:
 	static void setBomb(int index); 
 	static void explode(Bomb* bomb);
 	static void extinguish(Flame* flame);
+
 public:
 	static void init();
+	static void initParticipant(int index);
+	static void removeParticipant(int index);
 	static void printBoard();
 	static std::string getBoardString();
-	static void initPlayer(int index);
 	static void interpretMessage(std::string message, int index);
-	static void removePlayer(int index);
 	static void explodeDueBombs();
 	static void extinguishDueFlames();
 	static int timeUntilPerish();
-
+	static void handleGameEnd();
 };
 #endif

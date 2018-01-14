@@ -91,13 +91,26 @@ void Server::broadcastMessage(std::string message, std::list<int> ignoredSockets
 }
 
 void Server::removeDeadSockets(std::list<int> failedSocketIndexes){ //needs further testing
+	failedSocketIndexes.sort();
 	int countRemovedIndexes = 0;
 	for(int &index: failedSocketIndexes){
-		countRemovedIndexes++;
-		for(int i = index; i < numberOfSockets; i++){
-			whatToWaitFor[i] = whatToWaitFor[i + countRemovedIndexes]; 
-			Game::removeParticipant(i);
+		Game::removeParticipant(index - countRemovedIndexes);
+		close(whatToWaitFor[index - countRemovedIndexes].fd);
+		whatToWaitFor[index - countRemovedIndexes].fd = 0;
+		whatToWaitFor[index - countRemovedIndexes].events = 0;
+		printf("close: %d", index - countRemovedIndexes);
+		fflush(stdout);
+
+		for(int i = index; i < numberOfSockets - 1; i++){
+			int prev = i - countRemovedIndexes + 1;
+			int next = i - countRemovedIndexes;
+			whatToWaitFor[next].fd = whatToWaitFor[prev].fd; 
+			whatToWaitFor[next].events = whatToWaitFor[prev].events; 
+			whatToWaitFor[prev].fd = 0;
+			whatToWaitFor[prev].events = 0;
+			Game::changeIndex(prev, next);
 		}
+		countRemovedIndexes++;
 	}
 	numberOfSockets -= countRemovedIndexes;
 }
@@ -133,9 +146,12 @@ void Server::handleSocketEvents(){
 	int timeout = Game::timeUntilPerish();
 	int ready = poll(whatToWaitFor, numberOfSockets, timeout);
 	
-	for(int i = 0; i < numberOfSockets; i++){
+	int numberOfSocketsBeforeEvents = numberOfSockets;
+	for(int i = 0; i < numberOfSocketsBeforeEvents; i++){
 		try {
 			pollfd desc = whatToWaitFor[i];
+			printf("%d", desc.fd);
+			fflush(stdout);
 			if(desc.fd == sock && desc.revents == POLLIN){
 				write(0, "a", 1);
 				addNewClient();
@@ -167,6 +183,9 @@ void Server::handleSocketEvents(){
 	ignoredBroadcastSockets.push_back(sock);
 
 	broadcastMessage(Game::getBoardString(), ignoredBroadcastSockets); 
+
+	printf("nrSockets: %d\n", numberOfSockets);
+	fflush(stdout);
 }
 
 int Server::getSocket(){

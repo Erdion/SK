@@ -54,6 +54,7 @@ private:
 	public:
 		Participant(int index);
 		int getIndex();
+		void setIndex(int index);
 	};
 
 	class Spectator : public Participant{
@@ -70,7 +71,7 @@ private:
 		int range;
 		bool dead;
 	public:
-		Player(int index, int x, int y, int range = 3, int bombs = 3);
+		Player(int index, int x, int y, Field playerField, int range = 3, int bombs = 3);
 		void die();
 		std::pair<int, int> getCoords();
 		void setCoords(int x, int y);
@@ -117,6 +118,7 @@ private:
 	static std::map<int, Spectator*> spectators;
 	static std::list<Bomb*> bombs;
 	static std::list<Flame*> flames;
+	static std::map<int, Player*> playerPlayingAs;
 
 	static void startGame();
 	static void endGame();
@@ -140,6 +142,7 @@ private:
 public:
 	static void init();
 	static void initParticipant(int index);
+	static void changeIndex(int prev, int next);
 	static void removeParticipant(int index);
 	static void printBoard();
 	static std::string getBoardString();

@@ -14,6 +14,7 @@ bool Game::gameInPlay;
 Game::Board Game::board;
 std::map<int, Game::Player*> Game::players;
 std::map<int, Game::Spectator*> Game::spectators;
+std::map<int, Game::Player*> Game::playerPlayingAs;
 std::list<Game::Bomb*> Game::bombs;
 std::list<Game::Flame*> Game::flames;
 
@@ -103,25 +104,16 @@ int Game::Participant::getIndex(){
 	return index;
 }
 
+void Game::Participant::setIndex(int index){
+	this->index = index;
+}
+
 Game::Spectator::Spectator(int index): Participant(index) {
 	
 }
 
-Game::Player::Player(int index, int x, int y, int range, int bombs): Participant(index), x(x), y(y), range(range), bombsLeft(bombs), dead(false){
-	switch(index){
-			break;
-		case 1:
-			playerField = PLAYER1;
-			break;
-		case 2:
-			playerField = PLAYER2;
-			break;
-		case 3:
-			playerField = PLAYER3;
-			break;
-		case 4:
-			playerField = PLAYER4;
-	}
+Game::Player::Player(int index, int x, int y, Game::Field playerField, int range, int bombs): Participant(index), x(x), y(y), range(range), playerField(playerField), bombsLeft(bombs), dead(false){
+
 }
 
 void Game::Player::die(){
@@ -208,12 +200,17 @@ void Game::endGame(){
 	bombs.clear();
 	flames.clear();
 	board.fillBoard();
+	std::list<Player*> playersToReinitialize;
 	for(auto item: players){
 		Player* player = item.second;
+		playersToReinitialize.push_back(player);
+	}
+	for(Player* player: playersToReinitialize){
 		int index = player->getIndex();
 		removePlayer(index);
 		initPlayer(index);
 	}
+
 	std::list<Spectator*> spectatorsToBePlayers;
 	for(auto item: spectators){
 		Spectator* spectator = item.second;
@@ -243,24 +240,32 @@ void Game::initPlayer(int index){
 	std::pair<int, int> size = board.getSize();
 	int height = size.first;
 	int width = size.second;
-	switch(index){
+	int playerNumber;
+	for(int i = 1; i < 5; i++){
+		if(playerPlayingAs.count(i) == 0){
+			playerNumber = i;
+			break;
+		}
+	}
+	switch(playerNumber){
 		case 1:
-			player = new Player(index, 0, 0);
+			player = new Player(index, 0, 0, PLAYER1);
 			board.setField(0, 0, PLAYER1);
 			break;
 		case 2:	
-			player = new Player(index, height - 1, width - 1);
+			player = new Player(index, height - 1, width - 1, PLAYER2);
 			board.setField(height - 1, width - 1, PLAYER2);
 			break;
 		case 3:	
-			player = new Player(index, height - 1, 0);
+			player = new Player(index, height - 1, 0, PLAYER3);
 			board.setField(height - 1, 0, PLAYER3);
 			break;
 		case 4:	
-			player = new Player(index, 0, width - 1);
+			player = new Player(index, 0, width - 1, PLAYER4);
 			board.setField(0, width - 1, PLAYER4);
 			break;
 	}
+	playerPlayingAs[playerNumber] = player;
 	players[index] = player;
 }
 
@@ -275,6 +280,13 @@ void Game::removePlayer(int index){
 	std::pair<int, int> coords = player->getCoords();
 	int x = coords.first;
 	int y = coords.second;
+
+	for(auto& item: playerPlayingAs){
+		if(item.second->getIndex() == player->getIndex()){
+			playerPlayingAs.erase(item.first);
+			break;
+		}
+	}
 	
 	board.setField(x, y, EMPTY);
 	players.erase(index);
@@ -313,16 +325,16 @@ bool Game::isBombOnCoords(int x, int y){
 void Game::explodeCoord(int x, int y){
 	switch(board.getField(x, y)){
 		case PLAYER1:
-			players[1]->die();
+			playerPlayingAs[1]->die();
 			break;
 		case PLAYER2:
-			players[2]->die();
+			playerPlayingAs[2]->die();
 			break;
 		case PLAYER3:
-			players[3]->die();
+			playerPlayingAs[3]->die();
 			break;
 		case PLAYER4:
-			players[4]->die();
+			playerPlayingAs[4]->die();
 			break;
 		case BOMB:
 			explode(bombOnCoords(x, y));
@@ -514,6 +526,19 @@ void Game::initParticipant(int index){
 	}
 }
 
+void Game::changeIndex(int prev, int next){
+	if(prev < 4 && players.count(prev) == 1){
+		players[prev]->setIndex(next);
+		players[next] = players[prev];
+		players.erase(prev);
+	}
+	else{
+		spectators[prev]->setIndex(next);
+		spectators[next] = spectators[prev];
+		spectators.erase(prev);
+	}
+}
+
 void Game::removeParticipant(int index){
 	if(players.count(index) != 0){
 		removePlayer(index);
@@ -532,6 +557,8 @@ std::string Game::getBoardString(){
 }
 
 void Game::interpretMessage(std::string message, int index){
+	printf("%s", message.c_str());
+	fflush(stdout);
 	if(index > 0 && index <= 4 && players.count(index) != 0){
 		if(!gameInPlay){
 			if(message == "/s\n"){

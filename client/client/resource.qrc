@@ -1,2 +1,13 @@
-<!DOCTYPE RCC>
-<RCC version="1.0"/>
+<RCC>
+    <qresource prefix="/">
+        <file>Resources/bomb.png</file>
+        <file>Resources/empty.png</file>
+        <file>Resources/flame.png</file>
+        <file>Resources/player1.png</file>
+        <file>Resources/player2.png</file>
+        <file>Resources/player3.png</file>
+        <file>Resources/player4.png</file>
+        <file>Resources/wall.png</file>
+        <file>Resources/destructible.png</file>
+    </qresource>
+</RCC>

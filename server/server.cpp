@@ -90,15 +90,12 @@ void Server::sendMessage(std::string message, int clientSocket){
 			lengthToSend = BUFLEN - 1;
 		}
 		strcpy(buffer, message.substr(0, lengthToSend).c_str());
-		message = message.substr(lengthToSend);
 		buffer[lengthToSend + 1] = '\0';
 		int rec = write(clientSocket, buffer, lengthToSend);
 		if(rec == -1){
 			throw DeadSocketException("Write failed");
 		}
-		if(rec != lengthToSend){
-			throw DeadSocketException("Written less than requested");
-		}
+		message = message.substr(rec);
 	}
 }
 

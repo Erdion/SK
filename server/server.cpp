@@ -170,32 +170,24 @@ void Server::handleSocketEvents(){
 	for(int i = 0; i < numberOfSocketsBeforeEvents; i++){
 		try {
 			pollfd desc = whatToWaitFor[i];
-			printf("%d", desc.fd);
 			if(desc.fd == sock && desc.revents == POLLIN){
-				write(0, "a", 1);
 				addNewClient();
 				Game::initParticipant(numberOfSockets - 1);
 			}
 			else if(desc.revents == POLLIN) {
-				write(0, "b", 1);
 				std::string message = readMessage(desc.fd);
 				Game::interpretMessage(message, i);
 			}
 			else if(desc.revents & POLLERR){ //disconnected socket sometimes returns not only POLLERR, but a value where other bits are also set (very often POLLHUP & POLLERR)
-				write(0, "d", 1);
 				throw DeadSocketException("Dead socket");
 			}
 			else {
-				write(0, "c", 1);
 			}			
 		}
 		catch(const DeadSocketException &e){
 			failedSocketIndexes.push_back(i);
-			write(0, "dead", 4);
 		}
-		fflush(stdout);
 	}
-	printf("\n");
 
 	Game::explodeDueBombs();
 	Game::extinguishDueFlames();
@@ -209,7 +201,6 @@ void Server::handleSocketEvents(){
 
 	broadcastMessage(Game::getBoardString(), ignoredBroadcastSockets); 
 
-	fflush(stdout);
 }
 
 int Server::getSocket(){

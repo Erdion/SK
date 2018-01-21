@@ -30,11 +30,3 @@ Client::Client(int index){
 int Client::getSocket(){
 	return sock;
 }
-
-bool Client::isConnected(){
-	char buf[BUFLEN] = "ControlMessage";
-	if(write(sock, buf, BUFLEN) == -1){
-		return false;
-	}
-	return true;
-}

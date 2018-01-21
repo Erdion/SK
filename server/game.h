@@ -64,11 +64,11 @@ private:
 
 	class Player : public Participant{
 	private:
-		Field playerField;
 		int x;
 		int y;
-		int bombsLeft;
+		Field playerField;
 		int range;
+		int bombsLeft;
 		bool dead;
 	public:
 		Player(int index, int x, int y, Field playerField, int range = 3, int bombs = 3);
@@ -90,10 +90,14 @@ private:
 		int y;
 		int timeout;
 		time_point<system_clock> startTime;	
+		time_point<system_clock> pauseTime;
 		Perishable(int x, int y, int timeout);
 	public:
 		int getTimeLeft();
+		void pause();
+		void resume();
 		std::pair<int, int> getCoords();
+		bool isOnCoords(int x, int y);
 	};
 
 	class Bomb : public Perishable{
@@ -103,7 +107,6 @@ private:
 	public:
 		Bomb(int x, int y, int playerIndex, int timeout = 3000);
 		int getPlayerIndex();
-		bool isOnCoords(int x, int y);
 		int getRange();
 	};
 
@@ -113,6 +116,12 @@ private:
 	};
 	
 	static bool gameInPlay;
+	static bool paused;
+	static bool ended;
+	static std::string whoWonIdentifier;
+
+	static std::list<int> votesFor;
+
 	static Board board;
 	static std::map<int, Player*> players;
 	static std::map<int, Spectator*> spectators;
@@ -122,7 +131,10 @@ private:
 
 	static void startGame();
 	static void endGame();
+	static void vote(bool start, bool pause, int index);
 	static bool hasGameEnded();
+	static void pause();
+	static void resume();
 
 	static void initPlayer(int index);
 	static void initSpectator(int index);
@@ -138,6 +150,13 @@ private:
 	static void setBomb(int index); 
 	static void explode(Bomb* bomb);
 	static void extinguish(Flame* flame);
+
+	static std::string startedGame();
+	static std::string pausedGame();
+	static std::string numberOfPlayers();
+	static std::string endedGame();
+	static std::string whoWon();
+	static std::string numberOfVoters();
 
 public:
 	static void init();

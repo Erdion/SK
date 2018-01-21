@@ -34,6 +34,10 @@ void Server::setServerSocket(){
 	if(sock == -1) {
 		error(1, errno, "socket failed");
 	}
+	struct timeval tv;
+	tv.tv_sec = 2; //timeout
+	tv.tv_usec = 0;
+	setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv,sizeof(struct timeval));
 }
 
 void Server::setReuseAddr(){
@@ -63,21 +67,38 @@ void Server::addNewClient(){
 
 std::string Server::readMessage(int clientSocket){
 	char buffer[BUFLEN]{};
-	int rec = read(clientSocket, buffer, BUFLEN);
-	if(rec == 0){
-		throw DeadSocketException("Read failed");
+	int rec;
+	std::string message;
+	while((rec = recv(clientSocket, buffer, BUFLEN, 0)) > 0){
+		if(rec <= 0){
+			throw DeadSocketException("Read failed");
+		}
+		
+		std::string temp(buffer);
+		message += temp;
+		if(message[message.length() - 1] == 'E')
+			break;
 	}
-	std::string message(buffer);
 	return message;
 }
 
 void Server::sendMessage(std::string message, int clientSocket){
 	char buffer[BUFLEN]{};
-	strcpy(buffer, message.c_str());
-	buffer[message.length() - 1] = '\0';
-	int rec = write(clientSocket, buffer, BUFLEN);
-	if(rec == -1){
-		throw DeadSocketException("Write failed");
+	while(message.length() > 0){
+		int lengthToSend = message.length();
+		if(lengthToSend > BUFLEN - 1){
+			lengthToSend = BUFLEN - 1;
+		}
+		strcpy(buffer, message.substr(0, lengthToSend).c_str());
+		message = message.substr(lengthToSend);
+		buffer[lengthToSend + 1] = '\0';
+		int rec = write(clientSocket, buffer, lengthToSend);
+		if(rec == -1){
+			throw DeadSocketException("Write failed");
+		}
+		if(rec != lengthToSend){
+			throw DeadSocketException("Written less than requested");
+		}
 	}
 }
 
@@ -90,7 +111,7 @@ void Server::broadcastMessage(std::string message, std::list<int> ignoredSockets
 	}
 }
 
-void Server::removeDeadSockets(std::list<int> failedSocketIndexes){ //needs further testing
+void Server::removeDeadSockets(std::list<int> failedSocketIndexes){
 	failedSocketIndexes.sort();
 	int countRemovedIndexes = 0;
 	for(int &index: failedSocketIndexes){
@@ -98,8 +119,6 @@ void Server::removeDeadSockets(std::list<int> failedSocketIndexes){ //needs furt
 		close(whatToWaitFor[index - countRemovedIndexes].fd);
 		whatToWaitFor[index - countRemovedIndexes].fd = 0;
 		whatToWaitFor[index - countRemovedIndexes].events = 0;
-		printf("close: %d", index - countRemovedIndexes);
-		fflush(stdout);
 
 		for(int i = index; i < numberOfSockets - 1; i++){
 			int prev = i - countRemovedIndexes + 1;
@@ -146,12 +165,15 @@ void Server::handleSocketEvents(){
 	int timeout = Game::timeUntilPerish();
 	int ready = poll(whatToWaitFor, numberOfSockets, timeout);
 	
+	if(ready == -1){
+		error(1, errno, "poll failed");
+	}
+	
 	int numberOfSocketsBeforeEvents = numberOfSockets;
 	for(int i = 0; i < numberOfSocketsBeforeEvents; i++){
 		try {
 			pollfd desc = whatToWaitFor[i];
 			printf("%d", desc.fd);
-			fflush(stdout);
 			if(desc.fd == sock && desc.revents == POLLIN){
 				write(0, "a", 1);
 				addNewClient();
@@ -162,6 +184,10 @@ void Server::handleSocketEvents(){
 				std::string message = readMessage(desc.fd);
 				Game::interpretMessage(message, i);
 			}
+			else if(desc.revents & POLLERR){ //disconnected socket sometimes returns not only POLLERR, but a value where other bits are also set (very often POLLHUP & POLLERR)
+				write(0, "d", 1);
+				throw DeadSocketException("Dead socket");
+			}
 			else {
 				write(0, "c", 1);
 			}			
@@ -170,7 +196,9 @@ void Server::handleSocketEvents(){
 			failedSocketIndexes.push_back(i);
 			write(0, "dead", 4);
 		}
+		fflush(stdout);
 	}
+	printf("\n");
 
 	Game::explodeDueBombs();
 	Game::extinguishDueFlames();
@@ -184,7 +212,6 @@ void Server::handleSocketEvents(){
 
 	broadcastMessage(Game::getBoardString(), ignoredBroadcastSockets); 
 
-	printf("nrSockets: %d\n", numberOfSockets);
 	fflush(stdout);
 }
 

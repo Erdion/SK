@@ -8,5 +8,7 @@ Kompilacja clienta:
 należy otworzyć projekt w Qt i tam go skompilować
 
 Gra:
+
 Sterowanie: WSAD
+
 Postawienie bomby: spacja
